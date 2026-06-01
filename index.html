@@ -9,6 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Mercado">
+  <link rel="apple-touch-icon" href="icon.png">
   <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -192,6 +193,24 @@ select.form-input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http
 
 .content::-webkit-scrollbar, .sheet::-webkit-scrollbar { width: 3px; }
 .content::-webkit-scrollbar-thumb, .sheet::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* DELETE BUTTON (listas concluídas) */
+.btn-del-lista { background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; -webkit-tap-highlight-color: transparent; }
+.btn-del-lista:active { background: var(--danger-light); color: var(--danger); }
+
+/* CONFIG SCREEN */
+.config-row { display: flex; align-items: center; gap: 14px; padding: 15px 16px; cursor: pointer; -webkit-tap-highlight-color: transparent; border-bottom: 1px solid var(--border); }
+.config-row:last-child { border-bottom: none; }
+.config-row:active { background: var(--primary-light); }
+.config-row-icon { width: 42px; height: 42px; border-radius: 11px; background: var(--primary-light); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.config-row.danger .config-row-icon { background: var(--danger-light); }
+.config-row-info { flex: 1; }
+.config-row-title { font-size: 15px; font-weight: 600; }
+.config-row-title.danger { color: var(--danger); }
+.config-row-desc { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.config-about { padding: 16px; }
+.config-about-title { font-size: 15px; font-weight: 700; }
+.config-about-sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -204,6 +223,7 @@ select.form-input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http
         <div class="header-title">Mercado do Mês</div>
         <div class="header-subtitle">Lista de compras da família</div>
       </div>
+      <button class="btn-icon" onclick="navigate('config',null)" aria-label="Configurações" style="font-size:18px">⚙️</button>
     </div>
     <div class="content" id="home-content"></div>
     <button class="fab" onclick="openNovaLista()">+</button>
@@ -233,6 +253,41 @@ select.form-input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http
       </div>
     </div>
     <div class="content" id="compras-content"></div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="screen hidden" id="screen-config">
+    <div class="header">
+      <button class="btn-icon" onclick="goBack()">‹</button>
+      <div class="header-text"><div class="header-title">Configurações</div></div>
+    </div>
+    <div class="content">
+      <div class="section-label">Dados</div>
+      <div class="card">
+        <div class="config-row" onclick="exportarBackup()">
+          <div class="config-row-icon">📤</div>
+          <div class="config-row-info">
+            <div class="config-row-title">Exportar backup</div>
+            <div class="config-row-desc">Salva todas as listas em um arquivo JSON</div>
+          </div>
+        </div>
+        <div class="config-row" onclick="document.getElementById('import-input').click()">
+          <div class="config-row-icon">📥</div>
+          <div class="config-row-info">
+            <div class="config-row-title">Importar backup</div>
+            <div class="config-row-desc">Restaura listas a partir de um arquivo JSON</div>
+          </div>
+        </div>
+      </div>
+      <input type="file" id="import-input" accept=".json" style="display:none" onchange="importarBackup(event)">
+      <div class="section-label">Sobre</div>
+      <div class="card">
+        <div class="config-about">
+          <div class="config-about-title">Mercado do Mês</div>
+          <div class="config-about-sub">Todos os dados ficam salvos no seu dispositivo. Use o backup para transferir entre aparelhos ou guardar uma cópia de segurança.</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- DETALHE -->
@@ -458,7 +513,8 @@ function renderHome(){
     const bt={lista:'Em lista',compras:'Comprando',concluido:'Concluído'}[m.status];
     const q=m.itens.length;const qs=q===1?'1 item':`${q} itens`;
     const ts=total>0?` · ${fmt(total)}`:'';
-    return`<div class="card mes-card" onclick="abrirMes('${m.id}')"><div class="mes-card-info"><div class="mes-card-nome">${esc(m.label)}</div><div class="mes-card-sub">${qs}${ts}</div></div><span class="badge ${bc}">${bt}</span><span class="mes-card-arrow">›</span></div>`;
+    const delBtn=m.status==='concluido'?`<button class="btn-del-lista" onclick="pedirDeleteLista('${m.id}',event)" title="Excluir lista">🗑</button>`:'';
+    return`<div class="card mes-card" onclick="abrirMes('${m.id}')"><div class="mes-card-info"><div class="mes-card-nome">${esc(m.label)}</div><div class="mes-card-sub">${qs}${ts}</div></div><span class="badge ${bc}">${bt}</span>${delBtn}<span class="mes-card-arrow">›</span></div>`;
   }).join('');
 }
 function abrirMes(id){currentMesId=id;const m=getMes(id);if(!m)return;if(m.status==='lista')navigate('edicao',()=>renderEdicao(id));else if(m.status==='compras')navigate('compras',()=>renderCompras(id));else navigate('detalhe',()=>renderDetalhe(id));}
@@ -717,6 +773,49 @@ function renderDetalhe(mesId){
   if(extras.length)html+=`<div class="section-label">Extras (${extras.length})</div><div class="card">${extras.map(rowHtml).join('')}</div>`;
   if(total>0)html+=`<div class="card total-card"><span class="total-card-label">Total gasto</span><span class="total-card-value">${fmt(total)}</span></div>`;
   document.getElementById('detalhe-content').innerHTML=html;
+}
+
+// ── DELETE LISTA ─────────────────────────
+function pedirDeleteLista(id, event) {
+  event.stopPropagation();
+  const m=getMes(id);if(!m)return;
+  document.getElementById('confirm-title').textContent='Excluir lista?';
+  document.getElementById('confirm-msg').textContent=`Deseja excluir a lista de ${m.label}? Esta ação não pode ser desfeita.`;
+  document.getElementById('confirm-ok').onclick=()=>confirmarDeleteLista(id);
+  openSheet('sheet-confirm');
+}
+function confirmarDeleteLista(id) {
+  saveMeses(loadMeses().filter(m=>m.id!==id));
+  closeSheets();renderHome();
+}
+
+// ── BACKUP ───────────────────────────────
+function exportarBackup() {
+  const data=loadMeses();
+  if(!data.length){alert('Nenhuma lista para exportar.');return;}
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`mercado-mes-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+function importarBackup(event) {
+  const file=event.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try {
+      const data=JSON.parse(e.target.result);
+      if(!Array.isArray(data))throw new Error();
+      document.getElementById('confirm-title').textContent='Importar backup?';
+      document.getElementById('confirm-msg').textContent=`Encontradas ${data.length} lista(s). Os dados atuais serão substituídos. Continuar?`;
+      document.getElementById('confirm-ok').onclick=()=>{saveMeses(data);closeSheets();renderHome();event.target.value='';};
+      openSheet('sheet-confirm');
+    } catch {
+      alert('Arquivo inválido. Use um backup exportado pelo Mercado do Mês.');
+      event.target.value='';
+    }
+  };
+  reader.readAsText(file);
 }
 
 // ── INIT ─────────────────────────────────

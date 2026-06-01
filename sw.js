@@ -1,8 +1,10 @@
-const CACHE = 'mercado-mes-v1';
+const CACHE = 'mercado-mes-v2';
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(['./index.html', './manifest.json', './sw.js']))
+    caches.open(CACHE).then(c =>
+      c.addAll(['./index.html', './manifest.json', './sw.js', './icon.png'])
+    )
   );
   self.skipWaiting();
 });
