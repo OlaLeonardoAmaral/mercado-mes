@@ -1,0 +1,11 @@
+{
+  "name": "Mercado do Mês",
+  "short_name": "Mercado",
+  "description": "Lista de compras mensais da família",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F0F4F1",
+  "theme_color": "#2D7D46",
+  "orientation": "portrait",
+  "icons": []
+}
