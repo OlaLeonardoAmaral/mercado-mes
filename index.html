@@ -298,6 +298,7 @@ select.form-input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http
         <div class="header-title" id="detalhe-title"></div>
         <div class="header-subtitle" id="detalhe-sub"></div>
       </div>
+      <button class="btn-icon" onclick="pedirDeleteLista(currentMesId)" aria-label="Excluir lista" style="font-size:18px">🗑</button>
     </div>
     <div class="content" id="detalhe-content"></div>
   </div>
@@ -412,7 +413,8 @@ select.form-input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http
 </div>
 
 <script>
-const STORAGE_KEY = 'mercado_meses';
+const STORAGE_KEY  = 'mercado_meses';
+const CATALOG_KEY  = 'mercado_produtos'; // catálogo persistente de produtos (sobrevive à exclusão de meses)
 const MESES = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const UNIDADES = ['kg','g','L','ml','un','pct','cx','dz','sc'];
@@ -431,6 +433,22 @@ let addItemMode = 'edicao'; // 'edicao' ou 'compras'
 // ── DATA ─────────────────────────────────
 function loadMeses() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); } catch { return []; } }
 function saveMeses(m) { localStorage.setItem(STORAGE_KEY, JSON.stringify(m)); }
+function loadCatalog() { try { return JSON.parse(localStorage.getItem(CATALOG_KEY)||'{}'); } catch { return {}; } }
+function saveCatalog(c) { localStorage.setItem(CATALOG_KEY, JSON.stringify(c)); }
+// Salva os itens do mês no catálogo antes de deletar, para preservar o histórico de produtos
+function syncCatalog(mes) {
+  const cat = loadCatalog();
+  for (const it of mes.itens) {
+    const k = it.nome.toLowerCase().trim();
+    if (!cat[k]) {
+      cat[k] = { nome: it.nome, unidade: it.unidade, preco: it.preco, qtd: it.quantidade };
+    } else {
+      if (it.preco != null) cat[k].preco = it.preco;
+      cat[k].unidade = it.unidade;
+    }
+  }
+  saveCatalog(cat);
+}
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function getMes(id) { return loadMeses().find(m => m.id === id) || null; }
 function updateMes(u) { const a = loadMeses(); const i = a.findIndex(m=>m.id===u.id); if(i===-1)a.push(u);else a[i]=u; saveMeses(a); }
@@ -482,8 +500,11 @@ function cmpPreco(cur,prev) {
   return d>0?{txt:`↑ +${p}% vs anterior`,cls:'cmp-up'}:{txt:`↓ −${p}% vs anterior`,cls:'cmp-down'};
 }
 function getAllHistItems() {
+  // Começa pelo catálogo (produtos de meses já deletados)
+  const cat = loadCatalog();
+  const map = new Map(Object.entries(cat).map(([k,v])=>[k,{...v}]));
+  // Sobrepõe com dados dos meses existentes (mais recentes têm prioridade)
   const ml = loadMeses().sort((a,b)=>b.ano!==a.ano?b.ano-a.ano:b.mes-a.mes);
-  const map = new Map();
   for(const m of ml) for(const it of m.itens) {
     const k=it.nome.toLowerCase().trim();
     if(!map.has(k)) map.set(k,{nome:it.nome,unidade:it.unidade,preco:it.preco,qtd:it.quantidade});
@@ -513,8 +534,7 @@ function renderHome(){
     const bt={lista:'Em lista',compras:'Comprando',concluido:'Concluído'}[m.status];
     const q=m.itens.length;const qs=q===1?'1 item':`${q} itens`;
     const ts=total>0?` · ${fmt(total)}`:'';
-    const delBtn=m.status==='concluido'?`<button class="btn-del-lista" onclick="pedirDeleteLista('${m.id}',event)" title="Excluir lista">🗑</button>`:'';
-    return`<div class="card mes-card" onclick="abrirMes('${m.id}')"><div class="mes-card-info"><div class="mes-card-nome">${esc(m.label)}</div><div class="mes-card-sub">${qs}${ts}</div></div><span class="badge ${bc}">${bt}</span>${delBtn}<span class="mes-card-arrow">›</span></div>`;
+    return`<div class="card mes-card" onclick="abrirMes('${m.id}')"><div class="mes-card-info"><div class="mes-card-nome">${esc(m.label)}</div><div class="mes-card-sub">${qs}${ts}</div></div><span class="badge ${bc}">${bt}</span><span class="mes-card-arrow">›</span></div>`;
   }).join('');
 }
 function abrirMes(id){currentMesId=id;const m=getMes(id);if(!m)return;if(m.status==='lista')navigate('edicao',()=>renderEdicao(id));else if(m.status==='compras')navigate('compras',()=>renderCompras(id));else navigate('detalhe',()=>renderDetalhe(id));}
@@ -776,17 +796,19 @@ function renderDetalhe(mesId){
 }
 
 // ── DELETE LISTA ─────────────────────────
-function pedirDeleteLista(id, event) {
-  event.stopPropagation();
+function pedirDeleteLista(id) {
   const m=getMes(id);if(!m)return;
   document.getElementById('confirm-title').textContent='Excluir lista?';
-  document.getElementById('confirm-msg').textContent=`Deseja excluir a lista de ${m.label}? Esta ação não pode ser desfeita.`;
+  document.getElementById('confirm-msg').textContent=`Deseja excluir a lista de ${m.label}? Os produtos ficam salvos no histórico.`;
   document.getElementById('confirm-ok').onclick=()=>confirmarDeleteLista(id);
   openSheet('sheet-confirm');
 }
 function confirmarDeleteLista(id) {
+  const m=getMes(id);
+  if(m) syncCatalog(m); // preserva os produtos no catálogo antes de deletar
   saveMeses(loadMeses().filter(m=>m.id!==id));
-  closeSheets();renderHome();
+  closeSheets();
+  navStack=['home'];showScreen('home');renderHome();
 }
 
 // ── BACKUP ───────────────────────────────
